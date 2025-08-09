@@ -674,7 +674,7 @@
                 // 2秒後にボタンを再有効化
                 setTimeout(() => {
                     newTestBtn.disabled = false;
-                }, 2000);
+                }, 3000); // 3秒に延長
             });
         }
 
@@ -721,9 +721,17 @@
                 testBtn.classList.add('recording');
                 testBtn.textContent = '🔴';
                 testStatus.className = 'test-status';
-                testStatus.textContent = '聞いています...「テスト」と大きな声で言ってください';
-                testRecognition.textContent = '音声を認識中...';
+                testStatus.textContent = '準備中... 2秒後に「テスト」と大きな声で言ってください';
+                testRecognition.textContent = '音声認識準備中...';
                 updateDebugInfo('認識中...', '', '音声認識実行中', '接続済み・認識中');
+                
+                // 2秒後にメッセージを変更
+                setTimeout(() => {
+                    if (gameState.isRecording) {
+                        testStatus.textContent = '🎤 聞いています... 「テスト」と言ってください';
+                        testRecognition.textContent = '今すぐ「テスト」と言ってください';
+                    }
+                }, 2000);
             };
 
             gameState.recognition.onresult = (event) => {
@@ -776,6 +784,11 @@
             gameState.recognition.onaudiostart = () => {
                 console.log('音声入力開始イベント');
                 updateDebugInfo('音声入力検出', '', '音声入力開始', '接続済み・音声検出');
+                
+                // 音声入力が始まったことをユーザーに通知
+                if (gameState.currentScreen === 'mic-test-screen') {
+                    testStatus.textContent = '🎤 音声を検出中... そのまま「テスト」と言ってください';
+                }
             };
 
             gameState.recognition.onsoundstart = () => {
@@ -786,6 +799,12 @@
             gameState.recognition.onspeechstart = () => {
                 console.log('発話開始イベント');
                 updateDebugInfo('発話検出', '', '発話認識中', '接続済み・発話中');
+                
+                // 発話が検出されたことをユーザーに通知
+                if (gameState.currentScreen === 'mic-test-screen') {
+                    testStatus.textContent = '🗣️ 発話を検出しました！認識中...';
+                    testRecognition.textContent = '言葉を認識しています...';
+                }
             };
 
             gameState.recognition.onnomatch = () => {
