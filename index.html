@@ -310,7 +310,7 @@
                 マイク音量レベル: <span id="mic-level-text">0%</span>
             </div>
             
-            <button class="mic-button" id="test-mic-btn" onclick="startTestRecording()">🎤</button>
+            <button class="mic-button" id="test-mic-btn">🎤</button>
             
             <div class="recognition-display" id="test-recognition">
                 音声認識結果がここに表示されます
@@ -589,6 +589,7 @@
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.add('recording');
                         testBtn.textContent = '🔴';
+                        testBtn.disabled = false; // onstart時に再有効化
                         testStatus.className = 'test-status';
                         testStatus.textContent = '聞いています...「テスト」と言ってください';
                         testRecognition.textContent = '音声を認識中...';
@@ -688,6 +689,7 @@
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.remove('recording');
                         testBtn.textContent = '🎤';
+                        testBtn.disabled = false; // エラー時も再有効化
                     };
 
                     gameState.recognition.onend = () => {
@@ -695,6 +697,7 @@
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.remove('recording');
                         testBtn.textContent = '🎤';
+                        testBtn.disabled = false; // onend時に再有効化
                         updateDebugInfo('音声認識終了', '', '終了', '接続済み・停止');
                         gameState.isRecording = false;
                     };
@@ -727,6 +730,10 @@
                 return;
             }
 
+            // ボタンを一時的に無効化
+            const testBtn = document.getElementById('test-mic-btn');
+            testBtn.disabled = true;
+
             if (gameState.isRecording) {
                 console.log('録音停止');
                 gameState.recognition.stop();
@@ -745,6 +752,11 @@
                     updateDebugInfo('開始エラー', '', 'エラー: ' + error.message, '接続済み・エラー');
                 }
             }
+
+            // 1秒後にボタンを再有効化
+            setTimeout(() => {
+                testBtn.disabled = false;
+            }, 1000);
         }
 
         // ゲーム開始
@@ -1036,10 +1048,14 @@
                 }
             });
             
-            // マイクテストボタンの動作
-            document.getElementById('test-mic-btn').addEventListener('click', function() {
-                startTestRecording();
-            });
+            // マイクテストボタンの動作 - イベントリスナーの重複を防ぐ
+            const testMicBtn = document.getElementById('test-mic-btn');
+            if (testMicBtn && !testMicBtn.hasAttribute('data-listener-added')) {
+                testMicBtn.addEventListener('click', function() {
+                    startTestRecording();
+                });
+                testMicBtn.setAttribute('data-listener-added', 'true');
+            }
 
             // ブラウザサポートチェック
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
