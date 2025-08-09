@@ -740,6 +740,25 @@
             resetGameState();
         }
 
+        // マイクテストスキップ機能
+        function skipMicTest() {
+            console.log('🚀 マイクテストをスキップ');
+            
+            // 自動再開を停止
+            if (gameState.recognition) {
+                gameState.recognition.stop();
+            }
+            gameState.isRecording = false;
+            
+            document.getElementById('start-game-btn').disabled = false;
+            document.getElementById('test-status').className = 'test-status success';
+            document.getElementById('test-status').textContent = '✅ マイクテストをスキップしました。ゲームを開始できます。';
+            updateDebugInfo('テストスキップ', 'マイクテストをスキップしました', 'スキップ完了', 'テストスキップ');
+        }
+
+        // ゲーム開始スキップしました', 'スキップ完了', 'テストスキップ');
+        
+
         // ゲーム状態リセット
         function resetGameState() {
             gameState.currentQuestion = 0;
