@@ -540,13 +540,14 @@
                 <div class="debug-section">
                     <strong>簡易テスト:</strong>
                     <div style="background: #f0f8ff; padding: 10px; border-radius: 5px; margin: 5px 0;">
-                        <button class="btn" style="padding: 5px 15px; font-size: 14px; margin: 5px;" onclick="skipMicTest()">🚀 マイクテストをスキップしてゲーム開始</button>
+                        マイクが反応しない場合は、下の緑のボタンでスキップできます
                     </div>
                 </div>
             </div>
             
             <button class="btn" id="start-game-btn" onclick="startGame()" disabled>ゲーム開始</button>
             <button class="btn" onclick="goToStart()">戻る</button>
+            <button class="btn" style="background: linear-gradient(45deg, #28a745, #20c997);" onclick="skipMicTest()">🚀 マイクテストをスキップ</button>
         </div>
 
         <!-- ゲーム画面 -->
@@ -1148,17 +1149,13 @@
                 if (event.error === 'no-speech') {
                     console.log('🔇 no-speechエラー - 音声が検出されませんでした');
                     testStatus.className = 'test-status error';
-                    testStatus.textContent = '🔇 音声が検出されませんでした。マイクに向かって大きな声で話してください。';
+                    testStatus.textContent = '🔇 音声が検出されませんでした。マイクに向かって大きな声で話すか、下のスキップボタンを押してください。';
                     updateDebugInfo('音声検出されず', '', 'no-speech エラー', '接続済み・無音');
                     
-                    // 5秒後に自動再開
-                    setTimeout(() => {
-                        if (!gameState.isRecording) {
-                            console.log('🔄 自動で再開します');
-                            testStatus.textContent = '🔄 自動で再開します...';
-                            startSpeechRecognition();
-                        }
-                    }, 3000);
+                    // 自動再開は停止（無限ループ防止）
+                    testBtn.classList.remove('recording');
+                    testBtn.textContent = '🎤';
+                    gameState.isRecording = false;
                     return;
                 }
 
@@ -1209,6 +1206,22 @@
                     console.log('🔄 音声認識終了によりボタン再有効化');
                 }, 1000);
             };
+        }
+
+        // マイクテストスキップ機能
+        function skipMicTest() {
+            console.log('🚀 マイクテストをスキップ');
+            
+            // 自動再開を停止
+            if (gameState.recognition) {
+                gameState.recognition.stop();
+            }
+            gameState.isRecording = false;
+            
+            document.getElementById('start-game-btn').disabled = false;
+            document.getElementById('test-status').className = 'test-status success';
+            document.getElementById('test-status').textContent = '✅ マイクテストをスキップしました。ゲームを開始できます。';
+            updateDebugInfo('テストスキップ', 'マイクテストをスキップしました', 'スキップ完了', 'テストスキップ');
         }
 
         // ゲーム開始
