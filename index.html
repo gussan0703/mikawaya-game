@@ -463,20 +463,12 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
             
-            // 感度を最大限に向上させる設定
-            recognition.continuous = true;  // 連続認識を有効に戻す
-            recognition.interimResults = true;
+            // 精度を重視した設定
+            recognition.continuous = true;  // 連続認識で途切れを防ぐ
+            recognition.interimResults = true; // リアルタイム表示
             recognition.lang = 'ja-JP';
-            recognition.maxAlternatives = 3; // 複数の候補を取得
+            recognition.maxAlternatives = 1; // 最も確度の高い候補のみ
             
-            // より長時間の無音を許可
-            if (recognition.speechTimeout !== undefined) {
-                recognition.speechTimeout = 10000; // 10秒
-            }
-            if (recognition.speechTimeoutBuffer !== undefined) {
-                recognition.speechTimeoutBuffer = 3000; // 3秒
-            }
-
             console.log('音声認識設定:', {
                 continuous: recognition.continuous,
                 interimResults: recognition.interimResults,
@@ -731,8 +723,8 @@
                 testBtn.classList.add('recording');
                 testBtn.textContent = '🔴';
                 testStatus.className = 'test-status';
-                testStatus.textContent = '🎤 聞いています... 「テスト」「てすと」「あああ」など何でも大きな声で言ってください';
-                testRecognition.textContent = '何か話してみてください...';
+                testStatus.textContent = '🎤 聞いています... 「テスト」と言ってください';
+                testRecognition.textContent = '音声を認識中...';
                 updateDebugInfo('認識中...', '', '音声認識実行中', '接続済み・認識中');
             };
 
@@ -746,11 +738,6 @@
                     const confidence = event.results[i][0].confidence;
                     console.log(`結果 ${i}:`, transcript, 'Confidence:', confidence, 'Final:', event.results[i].isFinal);
                     
-                    // 複数の候補もログに出力
-                    for (let j = 0; j < event.results[i].length; j++) {
-                        console.log(`  候補 ${j}:`, event.results[i][j].transcript, 'Confidence:', event.results[i][j].confidence);
-                    }
-                    
                     if (event.results[i].isFinal) {
                         finalTranscript += transcript;
                     } else {
@@ -758,7 +745,7 @@
                     }
                 }
 
-                // デバッグ情報更新
+                // デバッグ情報更新（実際に認識された言葉をそのまま表示）
                 updateDebugInfo(
                     interimTranscript || '（認識中...）',
                     finalTranscript || '（まだありません）',
@@ -766,34 +753,36 @@
                     '接続済み・認識中'
                 );
 
-                // リアルタイム表示
+                // リアルタイム表示（実際の認識結果をそのまま）
                 const displayText = finalTranscript || interimTranscript || '音声を認識中...';
                 testRecognition.textContent = displayText;
 
-                // より寛容な判定
-                const testWords = ['テスト', 'test', 'Test', 'TEST', 'てすと', 'テス', 'スト'];
-                const isTestWord = testWords.some(word => 
-                    finalTranscript.includes(word) || interimTranscript.includes(word)
-                );
-
-                if (isTestWord) {
-                    console.log('テストワード検出！');
-                    testStatus.className = 'test-status success';
-                    testStatus.textContent = '✅ マイクは正常に動作しています！ゲームを開始できます。';
-                    startGameBtn.disabled = false;
-                    updateDebugInfo(
-                        interimTranscript,
-                        (finalTranscript || interimTranscript) + ' ← テスト関連の言葉が検出されました！',
-                        '認識成功！',
-                        '接続済み・テスト完了'
-                    );
+                // より厳密なテスト判定（完全一致または部分一致）
+                if (finalTranscript) {
+                    console.log('確定された言葉:', finalTranscript);
                     
-                    // 成功後も少し続行
-                    setTimeout(() => {
-                        if (gameState.recognition && gameState.isRecording) {
-                            gameState.recognition.stop();
-                        }
-                    }, 2000);
+                    // 「テスト」の判定を厳密に
+                    const normalizedFinal = finalTranscript.replace(/\s/g, ''); // スペース除去
+                    const isTestWord = normalizedFinal.includes('テスト') || normalizedFinal.includes('test');
+                    
+                    if (isTestWord) {
+                        console.log('テストワード検出！:', finalTranscript);
+                        testStatus.className = 'test-status success';
+                        testStatus.textContent = '✅ マイクは正常に動作しています！ゲームを開始できます。';
+                        startGameBtn.disabled = false;
+                        updateDebugInfo(
+                            interimTranscript,
+                            finalTranscript + ' ← 「テスト」が含まれています！',
+                            '認識成功！',
+                            '接続済み・テスト完了'
+                        );
+                        
+                        setTimeout(() => {
+                            if (gameState.recognition && gameState.isRecording) {
+                                gameState.recognition.stop();
+                            }
+                        }, 2000);
+                    }
                 }
             };
 
