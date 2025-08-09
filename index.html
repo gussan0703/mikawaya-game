@@ -296,7 +296,7 @@
                 <div class="mic-level-bar" id="mic-level-bar"></div>
             </div>
             
-            <button class="mic-button" id="test-mic-btn" onclick="startMicTest()">🎤</button>
+            <button class="mic-button" id="test-mic-btn" onclick="startTestRecording()">🎤</button>
             
             <div class="recognition-display" id="test-recognition">
                 音声認識結果がここに表示されます
@@ -403,16 +403,23 @@
         // 音声認識の初期化
         function initSpeechRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('お使いのブラウザは音声認識に対応していません。Chrome、Edge、Safariをご利用ください。');
+                console.error('Web Speech API not supported');
                 return null;
             }
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
             
-            recognition.continuous = true;
+            // より細かい設定
+            recognition.continuous = false;  // 連続認識をfalseに変更
             recognition.interimResults = true;
             recognition.lang = 'ja-JP';
+            recognition.maxAlternatives = 1;
+            
+            // 音声認識の感度を上げる
+            if (recognition.serviceURI) {
+                recognition.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+            }
 
             return recognition;
         }
@@ -460,57 +467,25 @@
             }
             
             showScreen('mic-test-screen');
-            
-            // 音声認識セットアップ
-            gameState.recognition = initSpeechRecognition();
-            if (!gameState.recognition) return;
+            setupMicTest();
+        }
 
-            const testBtn = document.getElementById('test-mic-btn');
+        // マイクテストのセットアップ
+        function setupMicTest() {
             const testStatus = document.getElementById('test-status');
             const testRecognition = document.getElementById('test-recognition');
             const startGameBtn = document.getElementById('start-game-btn');
 
-            gameState.recognition.onstart = () => {
-                testBtn.classList.add('recording');
-                testBtn.textContent = '🔴';
-                testStatus.className = 'test-status';
-                testStatus.textContent = '「テスト」と言ってください...';
-            };
+            // まずマイクの許可を取得
+            testStatus.className = 'test-status';
+            testStatus.textContent = 'マイクへのアクセス許可を確認しています...';
 
-            gameState.recognition.onresult = (event) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) {
-                        finalTranscript += event.results[i][0].transcript;
-                    }
-                }
-
-                testRecognition.textContent = finalTranscript || '認識中...';
-
-                if (finalTranscript.includes('テスト')) {
-                    testStatus.className = 'test-status success';
-                    testStatus.textContent = '✅ マイクは正常に動作しています！';
-                    startGameBtn.disabled = false;
-                    gameState.recognition.stop();
-                }
-            };
-
-            gameState.recognition.onerror = (event) => {
-                testStatus.className = 'test-status error';
-                testStatus.textContent = '❌ マイクエラーが発生しました: ' + event.error;
-                testBtn.classList.remove('recording');
-                testBtn.textContent = '🎤';
-            };
-
-            gameState.recognition.onend = () => {
-                testBtn.classList.remove('recording');
-                testBtn.textContent = '🎤';
-            };
-
-            // マイクレベル監視（簡易版）
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
-                    const audioContext = new AudioContext();
+                    testStatus.textContent = 'マイクアクセス許可が取得できました。マイクボタンを押してテストしてください。';
+                    
+                    // マイクレベル監視
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     const analyser = audioContext.createAnalyser();
                     const microphone = audioContext.createMediaStreamSource(stream);
                     microphone.connect(analyser);
@@ -520,31 +495,126 @@
                     const dataArray = new Uint8Array(bufferLength);
 
                     function updateMicLevel() {
+                        if (gameState.currentScreen !== 'mic-test-screen') {
+                            stream.getTracks().forEach(track => track.stop());
+                            return;
+                        }
+                        
                         analyser.getByteFrequencyData(dataArray);
                         let sum = 0;
                         for (let i = 0; i < bufferLength; i++) {
                             sum += dataArray[i];
                         }
                         const average = sum / bufferLength;
-                        const levelPercent = (average / 255) * 100;
+                        const levelPercent = Math.min((average / 128) * 100, 100);
                         document.getElementById('mic-level-bar').style.width = levelPercent + '%';
                         
-                        if (gameState.currentScreen === 'mic-test-screen') {
-                            requestAnimationFrame(updateMicLevel);
-                        } else {
-                            stream.getTracks().forEach(track => track.stop());
-                        }
+                        requestAnimationFrame(updateMicLevel);
                     }
                     updateMicLevel();
+
+                    // 音声認識の準備
+                    gameState.recognition = initSpeechRecognition();
+                    if (!gameState.recognition) {
+                        testStatus.className = 'test-status error';
+                        testStatus.textContent = '❌ 音声認識がサポートされていません';
+                        return;
+                    }
+
+                    // イベントリスナー設定
+                    gameState.recognition.onstart = () => {
+                        const testBtn = document.getElementById('test-mic-btn');
+                        testBtn.classList.add('recording');
+                        testBtn.textContent = '🔴';
+                        testStatus.className = 'test-status';
+                        testStatus.textContent = '聞いています...「テスト」と言ってください';
+                        testRecognition.textContent = '音声を認識中...';
+                    };
+
+                    gameState.recognition.onresult = (event) => {
+                        let interimTranscript = '';
+                        let finalTranscript = '';
+
+                        for (let i = event.resultIndex; i < event.results.length; i++) {
+                            const transcript = event.results[i][0].transcript;
+                            if (event.results[i].isFinal) {
+                                finalTranscript += transcript;
+                            } else {
+                                interimTranscript += transcript;
+                            }
+                        }
+
+                        // リアルタイム表示
+                        testRecognition.textContent = finalTranscript || interimTranscript || '音声を認識中...';
+
+                        if (finalTranscript.includes('テスト') || finalTranscript.includes('test')) {
+                            testStatus.className = 'test-status success';
+                            testStatus.textContent = '✅ マイクは正常に動作しています！ゲームを開始できます。';
+                            startGameBtn.disabled = false;
+                            setTimeout(() => {
+                                if (gameState.recognition) {
+                                    gameState.recognition.stop();
+                                }
+                            }, 1000);
+                        }
+                    };
+
+                    gameState.recognition.onerror = (event) => {
+                        console.error('音声認識エラー:', event.error);
+                        testStatus.className = 'test-status error';
+                        let errorMessage = '❌ 音声認識エラー: ';
+                        switch(event.error) {
+                            case 'no-speech':
+                                errorMessage += '音声が検出されませんでした。もう一度お試しください。';
+                                break;
+                            case 'audio-capture':
+                                errorMessage += 'マイクにアクセスできません。';
+                                break;
+                            case 'not-allowed':
+                                errorMessage += 'マイクのアクセス許可が必要です。';
+                                break;
+                            default:
+                                errorMessage += event.error;
+                        }
+                        testStatus.textContent = errorMessage;
+                        
+                        const testBtn = document.getElementById('test-mic-btn');
+                        testBtn.classList.remove('recording');
+                        testBtn.textContent = '🎤';
+                    };
+
+                    gameState.recognition.onend = () => {
+                        const testBtn = document.getElementById('test-mic-btn');
+                        testBtn.classList.remove('recording');
+                        testBtn.textContent = '🎤';
+                    };
+
                 })
                 .catch(err => {
                     console.error('マイクアクセスエラー:', err);
                     testStatus.className = 'test-status error';
-                    testStatus.textContent = '❌ マイクへのアクセスが許可されていません';
+                    testStatus.textContent = '❌ マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。';
                 });
+        }
 
-            if (gameState.recognition) {
-                gameState.recognition.start();
+        // テストマイクボタンの処理
+        function startTestRecording() {
+            if (!gameState.recognition) {
+                document.getElementById('test-status').textContent = '音声認識が準備されていません。ページを再読み込みしてください。';
+                return;
+            }
+
+            if (gameState.isRecording) {
+                gameState.recognition.stop();
+                gameState.isRecording = false;
+            } else {
+                try {
+                    gameState.recognition.start();
+                    gameState.isRecording = true;
+                } catch (error) {
+                    console.error('音声認識開始エラー:', error);
+                    document.getElementById('test-status').textContent = '❌ 音声認識を開始できませんでした: ' + error.message;
+                }
             }
         }
 
@@ -839,15 +909,7 @@
             
             // マイクテストボタンの動作
             document.getElementById('test-mic-btn').addEventListener('click', function() {
-                if (!gameState.recognition || gameState.recognition.state === 'inactive') {
-                    // 音声認識開始
-                    if (gameState.recognition) {
-                        gameState.recognition.start();
-                    }
-                } else {
-                    // 音声認識停止
-                    gameState.recognition.stop();
-                }
+                startTestRecording();
             });
 
             // ブラウザサポートチェック
@@ -892,4 +954,3 @@
     </script>
 </body>
 </html>
-            
