@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音声認識チャレンジゲーム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .input-group {
+            margin: 20px 0;
+        }
+
+        input[type="text"] {
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            width: 300px;
+            text-align: center;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .mic-button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            font-size: 24px;
+            margin: 20px;
+        }
+
+        .mic-button.recording {
+            background: linear-gradient(45deg, #51cf66, #40c057);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .question-display {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .recognition-display {
+            font-size: 2em;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f1f3f4;
+            border-radius: 15px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .char {
+            margin: 0 2px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .char.correct {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .char.incorrect {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .char.pending {
+            background-color: #ddd;
+            color: #666;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            flex: 1;
+            margin: 0 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .mic-level {
+            width: 100%;
+            height: 10px;
+            background: #ddd;
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .mic-level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.1s;
+        }
+
+        .test-status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.1em;
+        }
+
+        .test-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .test-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .results-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .final-score {
+            font-size: 3em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .instructions {
+            text-align: left;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            line-height: 1.6;
+        }
+
+        .timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- スタート画面 -->
+        <div id="start-screen" class="screen active">
+            <h1>🎤 音声認識チャレンジ</h1>
+            <div class="instructions">
+                <h3>ゲームの遊び方：</h3>
+                <ul>
+                    <li>表示されたお題を正確に発声してください</li>
+                    <li>20問中15問がランダムで出題されます</li>
+                    <li>正確性と速さで得点が決まります</li>
+                    <li>マイクボタンを押して音声入力開始です</li>
+                </ul>
+            </div>
+            <div class="input-group">
+                <input type="text" id="player-name" placeholder="プレイヤー名を入力" maxlength="20">
+            </div>
+            <button class="btn" onclick="startMicTest()">マイクテストへ</button>
+        </div>
+
+        <!-- マイクテスト画面 -->
+        <div id="mic-test-screen" class="screen">
+            <h2>🎤 マイクテスト</h2>
+            <p>「テスト」と言ってマイクの動作を確認してください</p>
+            
+            <div class="test-status" id="test-status">
+                マイクボタンを押して「テスト」と言ってください
+            </div>
+            
+            <div class="mic-level">
+                <div class="mic-level-bar" id="mic-level-bar"></div>
+            </div>
+            
+            <button class="mic-button" id="test-mic-btn" onclick="startMicTest()">🎤</button>
+            
+            <div class="recognition-display" id="test-recognition">
+                音声認識結果がここに表示されます
+            </div>
+            
+            <button class="btn" id="start-game-btn" onclick="startGame()" disabled>ゲーム開始</button>
+            <button class="btn" onclick="goToStart()">戻る</button>
+        </div>
+
+        <!-- ゲーム画面 -->
+        <div id="game-screen" class="screen">
+            <div class="game-info">
+                <div class="info-item">
+                    <strong>問題 <span id="current-question">1</span>/15</strong>
+                </div>
+                <div class="info-item">
+                    <strong>スコア: <span id="current-score">0</span>点</strong>
+                </div>
+                <div class="info-item">
+                    <strong class="timer">時間: <span id="timer">15</span>秒</strong>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+
+            <div class="question-display" id="question-text">
+                問題がここに表示されます
+            </div>
+
+            <button class="mic-button" id="game-mic-btn" onclick="startRecording()">🎤</button>
+
+            <div class="recognition-display" id="recognition-text">
+                音声認識結果がここに表示されます
+            </div>
+
+            <button class="btn" onclick="skipQuestion()">スキップ</button>
+            <button class="btn" onclick="endGame()">ゲーム終了</button>
+        </div>
+
+        <!-- 結果画面 -->
+        <div id="result-screen" class="screen">
+            <h2>🏆 ゲーム結果</h2>
+            
+            <div class="final-score" id="final-score">0</div>
+            
+            <div class="results-summary">
+                <h3><span id="player-result-name">プレイヤー</span>さんの結果</h3>
+                <p>正解率: <span id="accuracy-rate">0</span>%</p>
+                <p>平均回答時間: <span id="average-time">0</span>秒</p>
+                <p>完了問題数: <span id="completed-questions">0</span>/15問</p>
+            </div>
+
+            <div id="detailed-results"></div>
+
+            <button class="btn" onclick="restartGame()">もう一度プレイ</button>
+            <button class="btn" onclick="goToStart()">タイトルに戻る</button>
+        </div>
+    </div>
+
+    <script>
+        // ====== 問題データ設定エリア ======
+        // こちらで20問を自由に設定してください
+        const QUESTIONS = [
+            { id: 1, text: "おはようございます", category: "挨拶", difficulty: "easy", baseScore: 100 },
+            { id: 2, text: "ありがとうございました", category: "挨拶", difficulty: "easy", baseScore: 120 },
+            { id: 3, text: "生麦生米生卵", category: "早口言葉", difficulty: "hard", baseScore: 300 },
+            { id: 4, text: "東京特許許可局", category: "早口言葉", difficulty: "hard", baseScore: 280 },
+            { id: 5, text: "売上高営業利益率", category: "ビジネス", difficulty: "medium", baseScore: 200 },
+            { id: 6, text: "顧客満足度向上", category: "ビジネス", difficulty: "medium", baseScore: 180 },
+            { id: 7, text: "チームワーク", category: "ビジネス", difficulty: "easy", baseScore: 100 },
+            { id: 8, text: "イノベーション", category: "ビジネス", difficulty: "medium", baseScore: 150 },
+            { id: 9, text: "二千二十四年八月九日", category: "日付", difficulty: "medium", baseScore: 200 },
+            { id: 10, text: "Nice to meet you", category: "英語", difficulty: "medium", baseScore: 180 },
+            { id: 11, text: "Thank you very much", category: "英語", difficulty: "medium", baseScore: 200 },
+            { id: 12, text: "隣の客はよく柿食う客だ", category: "早口言葉", difficulty: "hard", baseScore: 320 },
+            { id: 13, text: "赤巻紙青巻紙黄巻紙", category: "早口言葉", difficulty: "hard", baseScore: 300 },
+            { id: 14, text: "コミュニケーション", category: "一般", difficulty: "easy", baseScore: 120 },
+            { id: 15, text: "プレゼンテーション", category: "ビジネス", difficulty: "medium", baseScore: 180 },
+            { id: 16, text: "Good morning everyone", category: "英語", difficulty: "medium", baseScore: 200 },
+            { id: 17, text: "お疲れ様でした", category: "挨拶", difficulty: "easy", baseScore: 120 },
+            { id: 18, text: "よろしくお願いします", category: "挨拶", difficulty: "easy", baseScore: 140 },
+            { id: 19, text: "バスガス爆発", category: "早口言葉", difficulty: "hard", baseScore: 250 },
+            { id: 20, text: "カ行五十音", category: "発声", difficulty: "medium", baseScore: 160 }
+        ];
+        // ====== 問題データ設定エリア終了 ======
+
+        // ゲーム状態管理
+        let gameState = {
+            currentScreen: 'start',
+            playerName: '',
+            currentQuestion: 0,
+            selectedQuestions: [],
+            results: [],
+            totalScore: 0,
+            recognition: null,
+            isRecording: false,
+            questionStartTime: 0,
+            timer: null,
+            timeLeft: 15
+        };
+
+        // 音声認識の初期化
+        function initSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('お使いのブラウザは音声認識に対応していません。Chrome、Edge、Safariをご利用ください。');
+                return null;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'ja-JP';
+
+            return recognition;
+        }
+
+        // 画面切り替え
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+            gameState.currentScreen = screenId;
+        }
+
+        // スタート画面に戻る
+        function goToStart() {
+            showScreen('start-screen');
+            resetGameState();
+        }
+
+        // ゲーム状態リセット
+        function resetGameState() {
+            gameState.currentQuestion = 0;
+            gameState.results = [];
+            gameState.totalScore = 0;
+            gameState.isRecording = false;
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+                gameState.timer = null;
+            }
+            if (gameState.recognition) {
+                gameState.recognition.stop();
+            }
+        }
+
+        // マイクテスト開始
+        function startMicTest() {
+            const playerName = document.getElementById('player-name').value.trim();
+            if (!playerName && gameState.currentScreen === 'start') {
+                alert('プレイヤー名を入力してください');
+                return;
+            }
+            
+            if (gameState.currentScreen === 'start') {
+                gameState.playerName = playerName;
+            }
+            
+            showScreen('mic-test-screen');
+            
+            // 音声認識セットアップ
+            gameState.recognition = initSpeechRecognition();
+            if (!gameState.recognition) return;
+
+            const testBtn = document.getElementById('test-mic-btn');
+            const testStatus = document.getElementById('test-status');
+            const testRecognition = document.getElementById('test-recognition');
+            const startGameBtn = document.getElementById('start-game-btn');
+
+            gameState.recognition.onstart = () => {
+                testBtn.classList.add('recording');
+                testBtn.textContent = '🔴';
+                testStatus.className = 'test-status';
+                testStatus.textContent = '「テスト」と言ってください...';
+            };
+
+            gameState.recognition.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                testRecognition.textContent = finalTranscript || '認識中...';
+
+                if (finalTranscript.includes('テスト')) {
+                    testStatus.className = 'test-status success';
+                    testStatus.textContent = '✅ マイクは正常に動作しています！';
+                    startGameBtn.disabled = false;
+                    gameState.recognition.stop();
+                }
+            };
+
+            gameState.recognition.onerror = (event) => {
+                testStatus.className = 'test-status error';
+                testStatus.textContent = '❌ マイクエラーが発生しました: ' + event.error;
+                testBtn.classList.remove('recording');
+                testBtn.textContent = '🎤';
+            };
+
+            gameState.recognition.onend = () => {
+                testBtn.classList.remove('recording');
+                testBtn.textContent = '🎤';
+            };
+
+            // マイクレベル監視（簡易版）
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    const audioContext = new AudioContext();
+                    const analyser = audioContext.createAnalyser();
+                    const microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+
+                    analyser.fftSize = 512;
+                    const bufferLength = analyser.frequencyBinCount;
+                    const dataArray = new Uint8Array(bufferLength);
+
+                    function updateMicLevel() {
+                        analyser.getByteFrequencyData(dataArray);
+                        let sum = 0;
+                        for (let i = 0; i < bufferLength; i++) {
+                            sum += dataArray[i];
+                        }
+                        const average = sum / bufferLength;
+                        const levelPercent = (average / 255) * 100;
+                        document.getElementById('mic-level-bar').style.width = levelPercent + '%';
+                        
+                        if (gameState.currentScreen === 'mic-test-screen') {
+                            requestAnimationFrame(updateMicLevel);
+                        } else {
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                    }
+                    updateMicLevel();
+                })
+                .catch(err => {
+                    console.error('マイクアクセスエラー:', err);
+                    testStatus.className = 'test-status error';
+                    testStatus.textContent = '❌ マイクへのアクセスが許可されていません';
+                });
+
+            if (gameState.recognition) {
+                gameState.recognition.start();
+            }
+        }
+
+        // ゲーム開始
+        function startGame() {
+            // 20問から15問をランダム選択
+            const shuffled = [...QUESTIONS].sort(() => 0.5 - Math.random());
+            gameState.selectedQuestions = shuffled.slice(0, 15);
+            gameState.currentQuestion = 0;
+            gameState.totalScore = 0;
+            gameState.results = [];
+
+            showScreen('game-screen');
+            showNextQuestion();
+        }
+
+        // 次の問題表示
+        function showNextQuestion() {
+            if (gameState.currentQuestion >= gameState.selectedQuestions.length) {
+                endGame();
+                return;
+            }
+
+            const question = gameState.selectedQuestions[gameState.currentQuestion];
+            document.getElementById('question-text').textContent = question.text;
+            document.getElementById('current-question').textContent = gameState.currentQuestion + 1;
+            document.getElementById('current-score').textContent = gameState.totalScore;
+            document.getElementById('recognition-text').innerHTML = '';
+            
+            // プログレスバー更新
+            const progress = ((gameState.currentQuestion) / gameState.selectedQuestions.length) * 100;
+            document.getElementById('progress-fill').style.width = progress + '%';
+
+            // タイマーリセット
+            gameState.timeLeft = 15;
+            document.getElementById('timer').textContent = gameState.timeLeft;
+            
+            // ボタンリセット
+            const micBtn = document.getElementById('game-mic-btn');
+            micBtn.classList.remove('recording');
+            micBtn.textContent = '🎤';
+            micBtn.disabled = false;
+
+            gameState.questionStartTime = Date.now();
+            startQuestionTimer();
+        }
+
+        // 問題タイマー
+        function startQuestionTimer() {
+            gameState.timer = setInterval(() => {
+                gameState.timeLeft--;
+                document.getElementById('timer').textContent = gameState.timeLeft;
+                
+                if (gameState.timeLeft <= 0) {
+                    clearInterval(gameState.timer);
+                    skipQuestion();
+                }
+            }, 1000);
+        }
+
+        // 録音開始
+        function startRecording() {
+            if (gameState.isRecording) {
+                stopRecording();
+                return;
+            }
+
+            gameState.recognition = initSpeechRecognition();
+            if (!gameState.recognition) return;
+
+            const micBtn = document.getElementById('game-mic-btn');
+            const recognitionText = document.getElementById('recognition-text');
+            const currentQuestion = gameState.selectedQuestions[gameState.currentQuestion];
+
+            gameState.isRecording = true;
+            micBtn.classList.add('recording');
+            micBtn.textContent = '⏹️';
+
+            gameState.recognition.onstart = () => {
+                recognitionText.textContent = '聞いています...';
+            };
+
+            gameState.recognition.onresult = (event) => {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                const displayText = finalTranscript || interimTranscript;
+                displayRecognitionResult(displayText, currentQuestion.text);
+
+                if (finalTranscript) {
+                    // 回答完了
+                    const timeSpent = (Date.now() - gameState.questionStartTime) / 1000;
+                    const result = calculateScore(finalTranscript, currentQuestion, timeSpent);
+                    gameState.results.push(result);
+                    gameState.totalScore += result.score;
+
+                    clearInterval(gameState.timer);
+                    stopRecording();
+                    
+                    // 1秒後に次の問題へ
+                    setTimeout(() => {
+                        gameState.currentQuestion++;
+                        showNextQuestion();
+                    }, 1500);
+                }
+            };
+
+            gameState.recognition.onerror = (event) => {
+                console.error('音声認識エラー:', event.error);
+                recognitionText.textContent = 'エラーが発生しました。もう一度お試しください。';
+                stopRecording();
+            };
+
+            gameState.recognition.start();
+        }
+
+        // 録音停止
+        function stopRecording() {
+            if (gameState.recognition) {
+                gameState.recognition.stop();
+            }
+            gameState.isRecording = false;
+            
+            const micBtn = document.getElementById('game-mic-btn');
+            micBtn.classList.remove('recording');
+            micBtn.textContent = '🎤';
+        }
+
+        // 認識結果の表示（文字色分け）
+        function displayRecognitionResult(userText, correctText) {
+            const recognitionDiv = document.getElementById('recognition-text');
+            const userChars = userText.split('');
+            const correctChars = correctText.split('');
+            
+            let html = '';
+            const maxLength = Math.max(userChars.length, correctChars.length);
+            
+            for (let i = 0; i < maxLength; i++) {
+                const userChar = userChars[i] || '';
+                const correctChar = correctChars[i] || '';
+                
+                let className = 'char ';
+                if (i < userChars.length && i < correctChars.length) {
+                    className += userChar === correctChar ? 'correct' : 'incorrect';
+                } else if (i >= userChars.length) {
+                    className += 'pending';
+                } else {
+                    className += 'incorrect';
+                }
+                
+                html += `<span class="${className}">${userChar || correctChar}</span>`;
+            }
+            
+            recognitionDiv.innerHTML = html;
+        }
+
+        // スコア計算
+        function calculateScore(userText, question, timeSpent) {
+            const correctText = question.text;
+            const userChars = userText.split('');
+            const correctChars = correctText.split('');
+            
+            let correctCount = 0;
+            const minLength = Math.min(userChars.length, correctChars.length);
+            
+            for (let i = 0; i < minLength; i++) {
+                if (userChars[i] === correctChars[i]) {
+                    correctCount++;
+                }
+            }
+            
+            const accuracy = correctChars.length > 0 ? (correctCount / correctChars.length) * 100 : 0;
+            
+            // 時間ボーナス計算
+            let timeBonus = 1.0;
+            if (timeSpent <= 5) timeBonus = 1.5;
+            else if (timeSpent <= 10) timeBonus = 1.2;
+            else if (timeSpent <= 15) timeBonus = 1.0;
+            else timeBonus = 0.8;
+            
+            const score = Math.round(question.baseScore * (accuracy / 100) * timeBonus);
+            
+            return {
+                questionId: question.id,
+                questionText: question.text,
+                userText: userText,
+                accuracy: Math.round(accuracy),
+                timeSpent: Math.round(timeSpent * 10) / 10,
+                score: Math.max(0, score),
+                baseScore: question.baseScore,
+                timeBonus: timeBonus
+            };
+        }
+
+        // 問題スキップ
+        function skipQuestion() {
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+            }
+            
+            const currentQuestion = gameState.selectedQuestions[gameState.currentQuestion];
+            const result = {
+                questionId: currentQuestion.id,
+                questionText: currentQuestion.text,
+                userText: '（スキップ）',
+                accuracy: 0,
+                timeSpent: 15,
+                score: 0,
+                baseScore: currentQuestion.baseScore,
+                timeBonus: 0.8
+            };
+            
+            gameState.results.push(result);
+            stopRecording();
+            
+            gameState.currentQuestion++;
+            showNextQuestion();
+        }
+
+        // ゲーム終了
+        function endGame() {
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+            }
+            stopRecording();
+            showResults();
+        }
+
+        // 結果表示
+        function showResults() {
+            showScreen('result-screen');
+            
+            const totalQuestions = gameState.results.length;
+            const correctAnswers = gameState.results.filter(r => r.accuracy >= 80).length;
+            const accuracyRate = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+            const averageTime = totalQuestions > 0 ? 
+                Math.round((gameState.results.reduce((sum, r) => sum + r.timeSpent, 0) / totalQuestions) * 10) / 10 : 0;
+
+            document.getElementById('final-score').textContent = gameState.totalScore + '点';
+            document.getElementById('player-result-name').textContent = gameState.playerName;
+            document.getElementById('accuracy-rate').textContent = accuracyRate;
+            document.getElementById('average-time').textContent = averageTime;
+            document.getElementById('completed-questions').textContent = totalQuestions;
+
+            // 詳細結果表示
+            const detailedResults = document.getElementById('detailed-results');
+            detailedResults.innerHTML = '<h3>詳細結果</h3>';
+            
+            gameState.results.forEach((result, index) => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+                
+                const accuracy = result.accuracy >= 80 ? '✅' : result.accuracy >= 50 ? '⚠️' : '❌';
+                
+                resultItem.innerHTML = `
+                    <div>
+                        <strong>問題${index + 1}:</strong> ${result.questionText}<br>
+                        <small>あなたの回答: ${result.userText}</small>
+                    </div>
+                    <div style="text-align: right;">
+                        ${accuracy} ${result.accuracy}%<br>
+                        <strong>${result.score}点</strong>
+                    </div>
+                `;
+                
+                detailedResults.appendChild(resultItem);
+            });
+        }
+
+        // ゲーム再開始
+        function restartGame() {
+            resetGameState();
+            startGame();
+        }
+
+        // 初期化処理
+        document.addEventListener('DOMContentLoaded', function() {
+            // エンターキーでプレイヤー名入力後にマイクテストへ
+            document.getElementById('player-name').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    startMicTest();
+                }
+            });
+            
+            // マイクテストボタンの動作
+            document.getElementById('test-mic-btn').addEventListener('click', function() {
+                if (!gameState.recognition || gameState.recognition.state === 'inactive') {
+                    // 音声認識開始
+                    if (gameState.recognition) {
+                        gameState.recognition.start();
+                    }
+                } else {
+                    // 音声認識停止
+                    gameState.recognition.stop();
+                }
+            });
+
+            // ブラウザサポートチェック
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                document.body.innerHTML = `
+                    <div class="container">
+                        <h1>❌ ブラウザ非対応</h1>
+                        <p>申し訳ございません。お使いのブラウザは音声認識に対応していません。</p>
+                        <p>以下のブラウザでお試しください：</p>
+                        <ul style="text-align: left; max-width: 300px; margin: 20px auto;">
+                            <li>Google Chrome</li>
+                            <li>Microsoft Edge</li>
+                            <li>Safari（Mac/iOS）</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        });
+
+        // ページ離脱時の処理
+        window.addEventListener('beforeunload', function() {
+            if (gameState.recognition) {
+                gameState.recognition.stop();
+            }
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+            }
+        });
+
+        // キーボードショートカット
+        document.addEventListener('keydown', function(e) {
+            if (gameState.currentScreen === 'game-screen') {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    startRecording();
+                } else if (e.code === 'Escape') {
+                    e.preventDefault();
+                    skipQuestion();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+            
