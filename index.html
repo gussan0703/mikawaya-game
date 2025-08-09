@@ -519,6 +519,12 @@
                         未接続
                     </div>
                 </div>
+                <div class="debug-section">
+                    <strong>操作ガイド:</strong>
+                    <div style="background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 5px 0; font-size: 0.9em;">
+                        📢 マイクボタンを<strong>1回だけ</strong>クリックして、<strong>3秒待ってから</strong>「テスト」と言ってください
+                    </div>
+                </div>
             </div>
             
             <button class="btn" id="start-game-btn" onclick="startGame()" disabled>ゲーム開始</button>
@@ -797,7 +803,7 @@
                         const analyser = audioContext.createAnalyser();
                         const microphone = audioContext.createMediaStreamSource(stream);
                         const gainNode = audioContext.createGain();
-                        gainNode.gain.value = 3.0;
+                        gainNode.gain.value = 2.0; // 増幅を2倍に調整（3倍は過剰だった）
                         
                         microphone.connect(gainNode);
                         gainNode.connect(analyser);
@@ -823,12 +829,18 @@
                                 if (amplitude > max) max = amplitude;
                             }
                             
-                            const levelPercent = Math.min((max / 30) * 100, 100);
+                            // ノイズフィルタリング - 基準値以下はカット
+                            const noiseThreshold = 3; // ノイズレベル
+                            const adjustedMax = max > noiseThreshold ? max - noiseThreshold : 0;
+                            
+                            // より適切な感度計算（ノイズを考慮）
+                            const levelPercent = Math.min((adjustedMax / 50) * 100, 100);
                             document.getElementById('mic-level-bar').style.width = levelPercent + '%';
                             document.getElementById('mic-level-text').textContent = Math.round(levelPercent) + '%';
                             
-                            if (levelPercent > 5) {
-                                console.log('音声レベル検出:', levelPercent + '%');
+                            // 実際の音声のみログ出力（ノイズ除外）
+                            if (levelPercent > 10) {
+                                console.log('音声レベル検出:', levelPercent + '%', '(Raw:', max, 'Adjusted:', adjustedMax, ')');
                             }
                             
                             requestAnimationFrame(updateMicLevel);
@@ -879,12 +891,22 @@
         function setupTestButton(stream) {
             const testBtn = document.getElementById('test-mic-btn');
             
+            // 既存のイベントリスナーを完全に削除
             testBtn.replaceWith(testBtn.cloneNode(true));
             const newTestBtn = document.getElementById('test-mic-btn');
+            
+            // ボタンの状態管理
+            let isButtonProcessing = false;
             
             newTestBtn.addEventListener('click', function(event) {
                 event.preventDefault();
                 event.stopPropagation();
+                
+                // 処理中の場合は無視
+                if (isButtonProcessing) {
+                    console.log('ボタン処理中のため無視');
+                    return;
+                }
                 
                 console.log('マイクボタンクリック - 現在の録音状態:', gameState.isRecording);
                 
@@ -893,6 +915,8 @@
                     return;
                 }
                 
+                // 処理フラグを立てる
+                isButtonProcessing = true;
                 newTestBtn.disabled = true;
                 
                 if (gameState.isRecording) {
@@ -905,9 +929,12 @@
                     startSpeechRecognition();
                 }
                 
+                // 5秒後にボタンを再有効化
                 setTimeout(() => {
                     newTestBtn.disabled = false;
-                }, 3000);
+                    isButtonProcessing = false;
+                    console.log('ボタンが再有効化されました');
+                }, 5000);
             });
         }
 
@@ -1109,6 +1136,12 @@
                 testBtn.textContent = '🎤';
                 updateDebugInfo('音声認識終了', '', '終了', '接続済み・停止');
                 gameState.isRecording = false;
+                
+                // ボタンの無効化を解除（音声認識終了時）
+                setTimeout(() => {
+                    testBtn.disabled = false;
+                    console.log('音声認識終了によりボタン再有効化');
+                }, 1000);
             };
         }
 
