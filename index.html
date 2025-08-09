@@ -256,10 +256,21 @@
             line-height: 1.6;
         }
 
-        .timer {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #ff6b6b;
+        .debug-info {
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+        }
+
+        .debug-section {
+            margin: 10px 0;
+        }
+
+        .debug-section strong {
+            color: #495057;
         }
     </style>
 </head>
@@ -295,11 +306,43 @@
             <div class="mic-level">
                 <div class="mic-level-bar" id="mic-level-bar"></div>
             </div>
+            <div style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
+                マイク音量レベル: <span id="mic-level-text">0%</span>
+            </div>
             
             <button class="mic-button" id="test-mic-btn" onclick="startTestRecording()">🎤</button>
             
             <div class="recognition-display" id="test-recognition">
                 音声認識結果がここに表示されます
+            </div>
+            
+            <!-- デバッグ情報表示エリア -->
+            <div class="debug-info">
+                <h4>🔍 デバッグ情報</h4>
+                <div class="debug-section">
+                    <strong>認識された言葉（リアルタイム）:</strong>
+                    <div id="debug-interim" style="background: #fff3cd; padding: 10px; border-radius: 5px; margin: 5px 0; min-height: 30px; font-style: italic;">
+                        まだ音声認識が開始されていません
+                    </div>
+                </div>
+                <div class="debug-section">
+                    <strong>確定された言葉:</strong>
+                    <div id="debug-final" style="background: #d1ecf1; padding: 10px; border-radius: 5px; margin: 5px 0; min-height: 30px; font-weight: bold;">
+                        まだ確定された言葉はありません
+                    </div>
+                </div>
+                <div class="debug-section">
+                    <strong>音声認識の状態:</strong>
+                    <div id="debug-status" style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0; min-height: 30px;">
+                        待機中
+                    </div>
+                </div>
+                <div class="debug-section">
+                    <strong>マイク接続状況:</strong>
+                    <div id="debug-mic-status" style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0; min-height: 30px;">
+                        未接続
+                    </div>
+                </div>
             </div>
             
             <button class="btn" id="start-game-btn" onclick="startGame()" disabled>ゲーム開始</button>
@@ -332,6 +375,16 @@
 
             <div class="recognition-display" id="recognition-text">
                 音声認識結果がここに表示されます
+            </div>
+
+            <!-- ゲーム中のデバッグ情報 -->
+            <div class="debug-info" style="margin-top: 20px;">
+                <div class="debug-section">
+                    <strong>PCが聞き取った言葉:</strong>
+                    <div id="game-debug-speech" style="background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 5px 0; min-height: 30px;">
+                        録音開始後に表示されます
+                    </div>
+                </div>
             </div>
 
             <button class="btn" onclick="skipQuestion()">スキップ</button>
@@ -476,6 +529,9 @@
             const testRecognition = document.getElementById('test-recognition');
             const startGameBtn = document.getElementById('start-game-btn');
 
+            // デバッグ表示の初期化
+            updateDebugInfo('マイクアクセスを確認中...', '', '初期化中', 'アクセス確認中');
+
             // まずマイクの許可を取得
             testStatus.className = 'test-status';
             testStatus.textContent = 'マイクへのアクセス許可を確認しています...';
@@ -483,6 +539,7 @@
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(stream => {
                     testStatus.textContent = 'マイクアクセス許可が取得できました。マイクボタンを押してテストしてください。';
+                    updateDebugInfo('マイクアクセス成功', '', '待機中', '接続済み');
                     
                     // マイクレベル監視
                     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -491,6 +548,7 @@
                     microphone.connect(analyser);
 
                     analyser.fftSize = 512;
+                    analyser.smoothingTimeConstant = 0.3;
                     const bufferLength = analyser.frequencyBinCount;
                     const dataArray = new Uint8Array(bufferLength);
 
@@ -506,8 +564,9 @@
                             sum += dataArray[i];
                         }
                         const average = sum / bufferLength;
-                        const levelPercent = Math.min((average / 128) * 100, 100);
+                        const levelPercent = Math.min((average / 50) * 100, 100); // 感度を上げる
                         document.getElementById('mic-level-bar').style.width = levelPercent + '%';
+                        document.getElementById('mic-level-text').textContent = Math.round(levelPercent) + '%';
                         
                         requestAnimationFrame(updateMicLevel);
                     }
@@ -518,25 +577,34 @@
                     if (!gameState.recognition) {
                         testStatus.className = 'test-status error';
                         testStatus.textContent = '❌ 音声認識がサポートされていません';
+                        updateDebugInfo('音声認識エラー', '', 'エラー: サポートなし', '接続済み');
                         return;
                     }
 
+                    console.log('音声認識オブジェクト作成完了:', gameState.recognition);
+
                     // イベントリスナー設定
                     gameState.recognition.onstart = () => {
+                        console.log('音声認識開始');
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.add('recording');
                         testBtn.textContent = '🔴';
                         testStatus.className = 'test-status';
                         testStatus.textContent = '聞いています...「テスト」と言ってください';
                         testRecognition.textContent = '音声を認識中...';
+                        updateDebugInfo('認識中...', '', '音声認識実行中', '接続済み・認識中');
                     };
 
                     gameState.recognition.onresult = (event) => {
+                        console.log('音声認識結果:', event);
                         let interimTranscript = '';
                         let finalTranscript = '';
 
                         for (let i = event.resultIndex; i < event.results.length; i++) {
                             const transcript = event.results[i][0].transcript;
+                            const confidence = event.results[i][0].confidence;
+                            console.log(`結果 ${i}:`, transcript, 'Confidence:', confidence, 'Final:', event.results[i].isFinal);
+                            
                             if (event.results[i].isFinal) {
                                 finalTranscript += transcript;
                             } else {
@@ -544,13 +612,28 @@
                             }
                         }
 
-                        // リアルタイム表示
-                        testRecognition.textContent = finalTranscript || interimTranscript || '音声を認識中...';
+                        // デバッグ情報更新
+                        updateDebugInfo(
+                            interimTranscript || '（認識中...）',
+                            finalTranscript || '（まだありません）',
+                            '認識結果を取得中',
+                            '接続済み・認識中'
+                        );
 
-                        if (finalTranscript.includes('テスト') || finalTranscript.includes('test')) {
+                        // リアルタイム表示
+                        const displayText = finalTranscript || interimTranscript || '音声を認識中...';
+                        testRecognition.textContent = displayText;
+
+                        if (finalTranscript && (finalTranscript.includes('テスト') || finalTranscript.includes('test'))) {
                             testStatus.className = 'test-status success';
                             testStatus.textContent = '✅ マイクは正常に動作しています！ゲームを開始できます。';
                             startGameBtn.disabled = false;
+                            updateDebugInfo(
+                                interimTranscript,
+                                finalTranscript + ' ← 「テスト」が含まれています！',
+                                '認識成功！',
+                                '接続済み・テスト完了'
+                            );
                             setTimeout(() => {
                                 if (gameState.recognition) {
                                     gameState.recognition.stop();
@@ -559,13 +642,33 @@
                         }
                     };
 
+                    gameState.recognition.onaudiostart = () => {
+                        console.log('音声入力開始');
+                        updateDebugInfo('音声入力検出', '', '音声入力開始', '接続済み・音声検出');
+                    };
+
+                    gameState.recognition.onsoundstart = () => {
+                        console.log('音声検出開始');
+                        updateDebugInfo('音声検出中', '', '音声検出中', '接続済み・音声あり');
+                    };
+
+                    gameState.recognition.onspeechstart = () => {
+                        console.log('発話開始');
+                        updateDebugInfo('発話検出', '', '発話認識中', '接続済み・発話中');
+                    };
+
+                    gameState.recognition.onnomatch = () => {
+                        console.log('認識結果なし');
+                        updateDebugInfo('認識できませんでした', '', '認識結果なし', '接続済み');
+                    };
+
                     gameState.recognition.onerror = (event) => {
-                        console.error('音声認識エラー:', event.error);
+                        console.error('音声認識エラー:', event.error, event);
                         testStatus.className = 'test-status error';
                         let errorMessage = '❌ 音声認識エラー: ';
                         switch(event.error) {
                             case 'no-speech':
-                                errorMessage += '音声が検出されませんでした。もう一度お試しください。';
+                                errorMessage += '音声が検出されませんでした。大きな声で話してください。';
                                 break;
                             case 'audio-capture':
                                 errorMessage += 'マイクにアクセスできません。';
@@ -573,10 +676,14 @@
                             case 'not-allowed':
                                 errorMessage += 'マイクのアクセス許可が必要です。';
                                 break;
+                            case 'network':
+                                errorMessage += 'ネットワークエラーです。';
+                                break;
                             default:
                                 errorMessage += event.error;
                         }
                         testStatus.textContent = errorMessage;
+                        updateDebugInfo('エラー発生', '', 'エラー: ' + event.error, '接続済み・エラー');
                         
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.remove('recording');
@@ -584,9 +691,12 @@
                     };
 
                     gameState.recognition.onend = () => {
+                        console.log('音声認識終了');
                         const testBtn = document.getElementById('test-mic-btn');
                         testBtn.classList.remove('recording');
                         testBtn.textContent = '🎤';
+                        updateDebugInfo('音声認識終了', '', '終了', '接続済み・停止');
+                        gameState.isRecording = false;
                     };
 
                 })
@@ -594,26 +704,45 @@
                     console.error('マイクアクセスエラー:', err);
                     testStatus.className = 'test-status error';
                     testStatus.textContent = '❌ マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。';
+                    updateDebugInfo('マイクアクセスエラー', '', 'エラー: ' + err.message, 'アクセス拒否');
                 });
+        }
+
+        // デバッグ情報更新
+        function updateDebugInfo(interim, final, status, micStatus) {
+            document.getElementById('debug-interim').textContent = interim;
+            document.getElementById('debug-final').textContent = final;
+            document.getElementById('debug-status').textContent = status;
+            document.getElementById('debug-mic-status').textContent = micStatus;
         }
 
         // テストマイクボタンの処理
         function startTestRecording() {
+            console.log('テスト録音開始ボタンが押されました');
+            
             if (!gameState.recognition) {
+                console.error('音声認識オブジェクトが存在しません');
                 document.getElementById('test-status').textContent = '音声認識が準備されていません。ページを再読み込みしてください。';
+                updateDebugInfo('エラー', '', 'recognition オブジェクトなし', '未初期化');
                 return;
             }
 
             if (gameState.isRecording) {
+                console.log('録音停止');
                 gameState.recognition.stop();
                 gameState.isRecording = false;
+                updateDebugInfo('停止中...', '', '録音停止', '接続済み・停止中');
             } else {
+                console.log('録音開始試行');
                 try {
+                    updateDebugInfo('開始中...', '', '録音開始試行', '接続済み・開始中');
                     gameState.recognition.start();
                     gameState.isRecording = true;
+                    console.log('音声認識開始成功');
                 } catch (error) {
                     console.error('音声認識開始エラー:', error);
                     document.getElementById('test-status').textContent = '❌ 音声認識を開始できませんでした: ' + error.message;
+                    updateDebugInfo('開始エラー', '', 'エラー: ' + error.message, '接続済み・エラー');
                 }
             }
         }
