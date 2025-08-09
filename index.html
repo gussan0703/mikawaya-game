@@ -463,16 +463,26 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
             
-            // より細かい設定
-            recognition.continuous = false;  // 連続認識をfalseに変更
+            // 感度を最大限に向上させる設定
+            recognition.continuous = true;  // 連続認識を有効に戻す
             recognition.interimResults = true;
             recognition.lang = 'ja-JP';
-            recognition.maxAlternatives = 1;
+            recognition.maxAlternatives = 3; // 複数の候補を取得
             
-            // 音声認識の感度を上げる
-            if (recognition.serviceURI) {
-                recognition.serviceURI = 'wss://www.google.com/speech-api/v2/recognize';
+            // より長時間の無音を許可
+            if (recognition.speechTimeout !== undefined) {
+                recognition.speechTimeout = 10000; // 10秒
             }
+            if (recognition.speechTimeoutBuffer !== undefined) {
+                recognition.speechTimeoutBuffer = 3000; // 3秒
+            }
+
+            console.log('音声認識設定:', {
+                continuous: recognition.continuous,
+                interimResults: recognition.interimResults,
+                lang: recognition.lang,
+                maxAlternatives: recognition.maxAlternatives
+            });
 
             return recognition;
         }
@@ -721,17 +731,9 @@
                 testBtn.classList.add('recording');
                 testBtn.textContent = '🔴';
                 testStatus.className = 'test-status';
-                testStatus.textContent = '準備中... 2秒後に「テスト」と大きな声で言ってください';
-                testRecognition.textContent = '音声認識準備中...';
+                testStatus.textContent = '🎤 聞いています... 「テスト」「てすと」「あああ」など何でも大きな声で言ってください';
+                testRecognition.textContent = '何か話してみてください...';
                 updateDebugInfo('認識中...', '', '音声認識実行中', '接続済み・認識中');
-                
-                // 2秒後にメッセージを変更
-                setTimeout(() => {
-                    if (gameState.isRecording) {
-                        testStatus.textContent = '🎤 聞いています... 「テスト」と言ってください';
-                        testRecognition.textContent = '今すぐ「テスト」と言ってください';
-                    }
-                }, 2000);
             };
 
             gameState.recognition.onresult = (event) => {
@@ -743,6 +745,11 @@
                     const transcript = event.results[i][0].transcript;
                     const confidence = event.results[i][0].confidence;
                     console.log(`結果 ${i}:`, transcript, 'Confidence:', confidence, 'Final:', event.results[i].isFinal);
+                    
+                    // 複数の候補もログに出力
+                    for (let j = 0; j < event.results[i].length; j++) {
+                        console.log(`  候補 ${j}:`, event.results[i][j].transcript, 'Confidence:', event.results[i][j].confidence);
+                    }
                     
                     if (event.results[i].isFinal) {
                         finalTranscript += transcript;
@@ -763,21 +770,30 @@
                 const displayText = finalTranscript || interimTranscript || '音声を認識中...';
                 testRecognition.textContent = displayText;
 
-                if (finalTranscript && (finalTranscript.includes('テスト') || finalTranscript.includes('test'))) {
+                // より寛容な判定
+                const testWords = ['テスト', 'test', 'Test', 'TEST', 'てすと', 'テス', 'スト'];
+                const isTestWord = testWords.some(word => 
+                    finalTranscript.includes(word) || interimTranscript.includes(word)
+                );
+
+                if (isTestWord) {
+                    console.log('テストワード検出！');
                     testStatus.className = 'test-status success';
                     testStatus.textContent = '✅ マイクは正常に動作しています！ゲームを開始できます。';
                     startGameBtn.disabled = false;
                     updateDebugInfo(
                         interimTranscript,
-                        finalTranscript + ' ← 「テスト」が含まれています！',
+                        (finalTranscript || interimTranscript) + ' ← テスト関連の言葉が検出されました！',
                         '認識成功！',
                         '接続済み・テスト完了'
                     );
+                    
+                    // 成功後も少し続行
                     setTimeout(() => {
-                        if (gameState.recognition) {
+                        if (gameState.recognition && gameState.isRecording) {
                             gameState.recognition.stop();
                         }
-                    }, 1000);
+                    }, 2000);
                 }
             };
 
@@ -814,11 +830,33 @@
 
             gameState.recognition.onerror = (event) => {
                 console.error('音声認識エラーイベント:', event.error, event);
+                
+                // no-speechエラーの場合は自動で再開を試行
+                if (event.error === 'no-speech' && gameState.isRecording) {
+                    console.log('no-speechエラー - 自動再開を試行します');
+                    testStatus.className = 'test-status';
+                    testStatus.textContent = '🔄 音声が検出されませんでした。再試行中... もう一度「テスト」と言ってください';
+                    updateDebugInfo('音声検出されず - 再試行中', '', '自動再開中', '接続済み・再試行');
+                    
+                    // 1秒後に自動再開
+                    setTimeout(() => {
+                        if (gameState.isRecording && gameState.recognition) {
+                            try {
+                                console.log('自動再開実行');
+                                gameState.recognition.start();
+                            } catch (restartError) {
+                                console.error('自動再開エラー:', restartError);
+                            }
+                        }
+                    }, 1000);
+                    return;
+                }
+
                 testStatus.className = 'test-status error';
                 let errorMessage = '❌ 音声認識エラー: ';
                 switch(event.error) {
                     case 'no-speech':
-                        errorMessage += '音声が検出されませんでした。大きな声で話してください。';
+                        errorMessage += '音声が検出されませんでした。マイクに近づいて大きな声で話してください。';
                         break;
                     case 'audio-capture':
                         errorMessage += 'マイクにアクセスできません。';
