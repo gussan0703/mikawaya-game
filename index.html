@@ -522,18 +522,25 @@
                 <div class="debug-section">
                     <strong>操作ガイド:</strong>
                     <div style="background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 5px 0; font-size: 0.9em;">
-                        📢 マイクボタンを<strong>1回だけ</strong>クリック→<strong>🔴になったら3秒待つ</strong>→<strong>「テスト」と大声で発声</strong><br>
-                        ⚠️ 音声が検出されない場合は自動で再試行されます
+                        📢 <strong>音量を最大</strong>にして、マイクに<strong>5cm以内</strong>で<strong>「あああああああ」</strong>と大声で叫んでください<br>
+                        ⚠️ 「テスト」より「あああああ」の方が認識しやすいです
                     </div>
                 </div>
                 <div class="debug-section">
                     <strong>トラブルシューティング:</strong>
                     <div style="background: #fff2cd; padding: 10px; border-radius: 5px; margin: 5px 0; font-size: 0.8em;">
-                        🔧 マイクが反応しない場合:<br>
-                        1. 他のアプリでマイクが使用中でないか確認<br>
-                        2. Chromeを再起動<br>
-                        3. マイクの音量設定を確認<br>
-                        4. VPNを使用している場合は無効化
+                        🔧 <strong>Google音声認識は非常に敏感です</strong>:<br>
+                        1. <strong>PC音量を100%</strong>にする<br>
+                        2. <strong>マイクブーストON</strong> (Windowsサウンド設定)<br>
+                        3. <strong>「あああああああ」</strong>と叫ぶように話す<br>
+                        4. 他のタブで動画再生をやめる<br>
+                        5. VPNがあれば切断する
+                    </div>
+                </div>
+                <div class="debug-section">
+                    <strong>簡易テスト:</strong>
+                    <div style="background: #f0f8ff; padding: 10px; border-radius: 5px; margin: 5px 0;">
+                        <button class="btn" style="padding: 5px 15px; font-size: 14px; margin: 5px;" onclick="skipMicTest()">🚀 マイクテストをスキップしてゲーム開始</button>
                     </div>
                 </div>
             </div>
@@ -1043,7 +1050,12 @@
                     console.log('確定された言葉:', finalTranscript);
                     
                     const normalizedFinal = finalTranscript.replace(/\s/g, '');
-                    const isTestWord = normalizedFinal.includes('テスト') || normalizedFinal.includes('test');
+                    const isTestWord = normalizedFinal.includes('テスト') || 
+                                       normalizedFinal.includes('test') ||
+                                       normalizedFinal.includes('あああ') ||
+                                       normalizedFinal.includes('ああああ') ||
+                                       normalizedFinal.includes('こんにちは') ||
+                                       normalizedFinal.includes('はい');
                     
                     if (isTestWord) {
                         console.log('🎉 テストワード検出！:', finalTranscript);
@@ -1052,7 +1064,7 @@
                         startGameBtn.disabled = false;
                         updateDebugInfo(
                             interimTranscript,
-                            finalTranscript + ' ← 「テスト」が含まれています！',
+                            finalTranscript + ' ← 音声認識成功！',
                             '認識成功！',
                             '接続済み・テスト完了'
                         );
